@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="so">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jadwalka Daryeelka Aabe - Xasusinta</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icon-192.png">
+<meta name="theme-color" content="#1e5c2f">
+<style>
+  :root{
+    --green-dark:#1e5c2f;
+    --green:#2f7d3f;
+    --green-light:#e8f5e9;
+    --red:#c62828;
+    --gold:#c9a227;
+    --bg:#f4f8f4;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Segoe UI', Tahoma, sans-serif;
+    background:linear-gradient(180deg,var(--bg),#e6f0e6);
+    color:#1b2b1e;
+    padding-bottom:40px;
+  }
+  header{
+    background:linear-gradient(135deg,var(--green-dark),var(--green));
+    color:#fff;
+    padding:22px 16px 18px;
+    text-align:center;
+    border-radius:0 0 22px 22px;
+    box-shadow:0 4px 12px rgba(0,0,0,.15);
+  }
+  header h1{margin:0;font-size:1.4rem;}
+  header p{margin:4px 0 0;font-size:.85rem;opacity:.9;}
+
+  .warning{
+    margin:16px;
+    background:#fff5f5;
+    border:2px solid var(--red);
+    border-radius:14px;
+    padding:14px;
+    font-size:.85rem;
+    line-height:1.5;
+  }
+  .warning b{color:var(--red);}
+
+  .card{
+    margin:16px;
+    background:#fff;
+    border:1px solid #cfe3cf;
+    border-radius:16px;
+    padding:16px;
+    box-shadow:0 2px 8px rgba(0,0,0,.06);
+  }
+
+  .now-card{
+    background:linear-gradient(135deg,#fff,var(--green-light));
+    text-align:center;
+  }
+  .now-card .shift-label{
+    display:inline-block;
+    background:var(--green-dark);
+    color:#fff;
+    padding:4px 14px;
+    border-radius:20px;
+    font-size:.8rem;
+    margin-bottom:8px;
+  }
+  .now-card .person{
+    font-size:1.7rem;
+    font-weight:700;
+    color:var(--green-dark);
+    margin:6px 0;
+  }
+  .now-card .meta{font-size:.85rem;color:#456;}
+
+  .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;justify-content:center;}
+  button{
+    border:none;
+    border-radius:10px;
+    padding:10px 16px;
+    font-size:.9rem;
+    font-weight:600;
+    cursor:pointer;
+    background:var(--green);
+    color:#fff;
+    transition:.15s;
+  }
+  button:active{transform:scale(.96);}
+  button.secondary{background:#e0e0e0;color:#333;}
+  button.danger{background:var(--red);}
+  button.gold{background:var(--gold);}
+
+  .status-pill{
+    display:inline-block;
+    font-size:.75rem;
+    padding:3px 10px;
+    border-radius:12px;
+    margin-top:8px;
+  }
+  .ok{background:#e0f5e4;color:#1e5c2f;}
+  .off{background:#fdeaea;color:#c62828;}
+
+  select, input[type=date]{
+    padding:8px 10px;
+    border-radius:8px;
+    border:1px solid #ccc;
+    font-size:.9rem;
+  }
+
+  .field-label{font-size:.8rem;color:#555;margin-bottom:4px;display:block;}
+
+  table{width:100%;border-collapse:collapse;margin-top:10px;font-size:.82rem;}
+  th,td{padding:7px 5px;text-align:center;border-bottom:1px solid #eee;}
+  th{background:var(--green-dark);color:#fff;font-size:.75rem;}
+  tr.today{background:#fff9db;font-weight:700;}
+  tr.today td:first-child{color:var(--green-dark);}
+
+  .section-title{
+    font-weight:700;
+    color:var(--green-dark);
+    margin:0 0 6px;
+    font-size:1rem;
+  }
+  .sub{font-size:.8rem;color:#666;margin:0 0 10px;}
+
+  .log{
+    max-height:120px;
+    overflow-y:auto;
+    font-size:.75rem;
+    background:#f7f7f7;
+    border-radius:8px;
+    padding:8px;
+    margin-top:10px;
+    color:#555;
+  }
+  .footer-note{
+    text-align:center;
+    font-size:.75rem;
+    color:#789;
+    padding:10px 20px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🕊️ Jadwalka Daryeelka Aabe</h1>
+  <p>Xasusinta cod leh — qofka joogitaanka ah</p>
+</header>
+
+<div class="warning">
+  ⚠️ <b>FARIIN MUHIIM AH:</b> Qofka ku qoran seexashada habeenkii lama oggola inuu seexdo.
+  Waa inuu si buuxda u soo jeedaa habeenka oo dhan si uu aabe uga caawiyo baahiyaha habeenkii iyo la socodka dhaqdhaqaaqiisa.
+</div>
+
+<div class="card now-card">
+  <div class="shift-label" id="shiftLabel">--</div>
+  <div class="person" id="personName">Waxaa la soo rarayaa...</div>
+  <div class="meta" id="metaInfo">--</div>
+  <div id="permPill" class="status-pill off">🔕 Ogolaanshaha ogeysiisyada: LAMA OGOLAYN</div>
+  <div class="row">
+    <button onclick="enableAll()">🔔 Daar Ogeysiisyada + Cod</button>
+    <button class="secondary" onclick="testAlert()">🔊 Tijaabi Codka Hadda</button>
+  </div>
+</div>
+
+<div class="card">
+  <p class="section-title">⚙️ Dejinta</p>
+  <p class="sub">Dooro toddobaadka hadda socda iyo inta jeer ee cod-xasuusinta la soo celinayo habeenkii.</p>
+
+  <label class="field-label">Toddobaadka Hadda (habeenka Jimcaha):</label>
+  <select id="weekSelect" onchange="saveWeek()">
+    <option value="1">Toddobaadka 1 — Dr. Xaaris</option>
+    <option value="2">Toddobaadka 2 — Dr. Yaxye</option>
+  </select>
+
+  <div style="margin-top:12px;">
+    <label class="field-label">Cod-xasuusinta habeenka (Habeen) — inta jeer:</label>
+    <select id="nightInterval" onchange="saveSettings()">
+      <option value="10">Every 10 daqiiqo</option>
+      <option value="15" selected>Every 15 daqiiqo</option>
+      <option value="20">Every 20 daqiiqo</option>
+      <option value="30">Every 30 daqiiqo</option>
+    </select>
+  </div>
+
+  <div style="margin-top:12px;">
+    <label class="field-label">Cod-xasuusinta Maalinta/Galabka — inta jeer:</label>
+    <select id="dayInterval" onchange="saveSettings()">
+      <option value="30">Every 30 daqiiqo</option>
+      <option value="60" selected>Every 60 daqiiqo</option>
+      <option value="0">Ha dib u celin (hal mar oo keliya)</option>
+    </select>
+  </div>
+</div>
+
+<div class="card">
+  <p class="section-title">📅 Toddobaadka 1 — Habeenka Jimcaha: Dr. Xaaris</p>
+  <table id="table1"></table>
+</div>
+
+<div class="card">
+  <p class="section-title">📅 Toddobaadka 2 — Habeenka Jimcaha: Dr. Yaxye</p>
+  <table id="table2"></table>
+</div>
+
+<div class="card">
+  <p class="section-title">🗒️ Diiwaanka Xasuusinta</p>
+  <div class="log" id="logBox">Weli wax lama diirin...</div>
+</div>
+
+<p class="footer-note">
+  Muhiim: Si service worker-ku (ogeysiisyada background-ka) u shaqeeyo, faylashan waa in laga furaa server (HTTPS ama localhost) — ma shaqeeyaan haddii file-ka si toos ah loo furo (file://). Fiiro gaar ah: xataa PWA, browser-yadu si buuxda kuma taageeraan ogeysiis 100% background ah marka app-ka la daboolo — sida ugu hubanta badan waa in bogga la furan yahay.
+</p>
+
+<script>
+// ---------- SCHEDULE DATA ----------
+const days = ["Sabti","Axad","Isniin","Talaado","Arbaco","Khamiis","Jimce"];
+// JS getDay(): 0=Sunday...6=Saturday. Map to our days array index.
+const jsDayToIndex = {6:0, 0:1, 1:2, 2:3, 3:4, 4:5, 5:6}; // Sat=0 ... Fri=6
+
+const baseSchedule = {
+  "Sabti":   {maalin:"Ibraheem Abdulkader", galab:"Mustafe", habeen:"Haaruun"},
+  "Axad":    {maalin:"Cumar", galab:"Ciise", habeen:"Ugaas Maxamuud"},
+  "Isniin":  {maalin:"Haaruun", galab:"Ciise", habeen:"Cumar"},
+  "Talaado": {maalin:"Mustafe", galab:"Ciise", habeen:"Haaruun"},
+  "Arbaco":  {maalin:"Ibraheem Abdulkader", galab:"Cumar", habeen:"Mustafe"},
+  "Khamiis": {maalin:"Cumar", galab:"Ibraheem", habeen:"Haaruun"},
+  "Jimce":   {maalin:"Mustafe", galab:"Cumar", habeen:null} // depends on week
+};
+
+function getSchedule(week){
+  const sched = JSON.parse(JSON.stringify(baseSchedule));
+  sched["Jimce"].habeen = (week==1) ? "Dr. Xaaris" : "Dr. Yaxye";
+  return sched;
+}
+
+// ---------- STATE ----------
+let currentWeek = localStorage.getItem('bx_week') || "1";
+let nightInterval = parseInt(localStorage.getItem('bx_nightInterval') || "15");
+let dayInterval = parseInt(localStorage.getItem('bx_dayInterval') || "60");
+let notifTimer = null;
+let lastAnnouncedKey = null;
+
+document.getElementById('weekSelect').value = currentWeek;
+document.getElementById('nightInterval').value = nightInterval;
+document.getElementById('dayInterval').value = dayInterval;
+
+function saveWeek(){
+  currentWeek = document.getElementById('weekSelect').value;
+  localStorage.setItem('bx_week', currentWeek);
+  refresh();
+  log("Toddobaadka waxaa loo beddelay: Toddobaadka " + currentWeek);
+}
+function saveSettings(){
+  nightInterval = parseInt(document.getElementById('nightInterval').value);
+  dayInterval = parseInt(document.getElementById('dayInterval').value);
+  localStorage.setItem('bx_nightInterval', nightInterval);
+  localStorage.setItem('bx_dayInterval', dayInterval);
+  scheduleNextTimer();
+  log("Dejinta xasuusinta waa la cusboonaysiiyay.");
+}
+
+// ---------- SHIFT LOGIC ----------
+function getCurrentShiftInfo(){
+  const now = new Date();
+  const jsDay = now.getDay();
+  const idx = jsDayToIndex[jsDay];
+  const dayName = days[idx];
+  const h = now.getHours() + now.getMinutes()/60;
+
+  let shift, shiftLabel, next;
+  if(h >= 8.5 && h < 14){ shift="maalin"; shiftLabel="🌞 Maalin (8:30 AM–2:00 PM)"; }
+  else if(h >= 14 && h < 18){ shift="galab"; shiftLabel="🌇 Galab (2:00 PM–6:00 PM)"; }
+  else { shift="habeen"; shiftLabel="🌙 Habeen (Seexasho — laga bilaabo 6:00 PM)"; }
+
+  // For overnight habeen shift after midnight, the "day" it belongs to is the previous day
+  let scheduleDayName = dayName;
+  if(h < 8.5 && shift==="habeen"){
+    const prevIdx = (idx + 6) % 7;
+    scheduleDayName = days[prevIdx];
+  }
+
+  const sched = getSchedule(currentWeek);
+  const person = sched[scheduleDayName][shift];
+
+  return {dayName, scheduleDayName, shift, shiftLabel, person, now};
+}
+
+function refresh(){
+  const info = getCurrentShiftInfo();
+  document.getElementById('shiftLabel').textContent = info.shiftLabel + " • " + info.dayName;
+  document.getElementById('personName').textContent = info.person;
+  document.getElementById('metaInfo').textContent = "Toddobaadka " + currentWeek + " • Waqtiga hadda: " + info.now.toLocaleTimeString('so-SO');
+  renderTables();
+  highlightToday(info.scheduleDayName, info.shift);
+}
+
+function renderTables(){
+  for(const w of [1,2]){
+    const sched = getSchedule(w);
+    let html = "<tr><th>Maalinka</th><th>8:30AM–2PM</th><th>2PM–8PM</th><th>Seexashada</th></tr>";
+    for(const d of days){
+      html += `<tr id="row_${w}_${d}"><td>${d}</td><td>${sched[d].maalin}</td><td>${sched[d].galab}</td><td>${sched[d].habeen}</td></tr>`;
+    }
+    document.getElementById('table'+w).innerHTML = html;
+  }
+}
+
+function highlightToday(dayName, shift){
+  document.querySelectorAll('tr.today').forEach(r=>r.classList.remove('today'));
+  const row = document.getElementById('row_'+currentWeek+'_'+dayName);
+  if(row) row.classList.add('today');
+}
+
+// ---------- NOTIFICATIONS + VOICE ----------
+function speak(text){
+  try{
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'ar-SA'; // closest widely supported voice; Somali TTS rarely available
+    u.rate = 0.95;
+    u.volume = 1;
+    window.speechSynthesis.speak(u);
+  }catch(e){ console.warn(e); }
+}
+
+function notify(title, body){
+  if(Notification.permission !== 'granted') return;
+  // Prefer the Service Worker so the notification is more reliable when the
+  // tab is backgrounded, and so it survives even if this JS context stalls.
+  if(navigator.serviceWorker){
+    navigator.serviceWorker.ready.then(reg=>{
+      reg.active && reg.active.postMessage({type:'SHOW_NOTIFICATION', title, body});
+    }).catch(()=>{
+      try{ new Notification(title, {body, requireInteraction:true}); }catch(e){}
+    });
+  } else {
+    try{ new Notification(title, {body, requireInteraction:true}); }catch(e){}
+  }
+}
+
+function announceCurrent(){
+  const info = getCurrentShiftInfo();
+  const text = info.shift==='habeen'
+    ? `Xilliga habeenka. Qofka joogitaanka ah waa ${info.person}. Fadlan soo jeed, ha seexan.`
+    : `${info.shiftLabel.replace(/[^\w\s]/g,'')}. Qofka joogitaanka ah waa ${info.person}.`;
+  speak(text);
+  notify("👤 Qofka Joogitaanka Ah: " + info.person, info.shiftLabel + " — " + info.dayName);
+  log("Xasuusin: " + info.person + " (" + info.shiftLabel + ")");
+  document.getElementById('personName').textContent = info.person;
+  document.getElementById('shiftLabel').textContent = info.shiftLabel + " • " + info.dayName;
+}
+
+function scheduleNextTimer(){
+  if(notifTimer) clearTimeout(notifTimer);
+  const info = getCurrentShiftInfo();
+  let mins;
+  if(info.shift === 'habeen'){
+    mins = nightInterval;
+  } else {
+    if(dayInterval === 0){ return; } // no repeat
+    mins = dayInterval;
+  }
+  notifTimer = setTimeout(()=>{
+    announceCurrent();
+    scheduleNextTimer();
+  }, mins*60*1000);
+}
+
+function enableAll(){
+  if('Notification' in window){
+    Notification.requestPermission().then(perm=>{
+      updatePermPill();
+      if(perm === 'granted'){
+        log("Ogolaanshaha ogeysiisyada waa la helay ✅");
+        announceCurrent();
+        scheduleNextTimer();
+      }
+    });
+  }
+  // unlock speech synthesis on user gesture
+  speak("Xasuusinta cod-ku waa la daarey.");
+}
+
+function testAlert(){
+  announceCurrent();
+}
+
+function updatePermPill(){
+  const pill = document.getElementById('permPill');
+  if(Notification.permission === 'granted'){
+    pill.textContent = "🔔 Ogeysiisyadu waa firfircoon";
+    pill.className = "status-pill ok";
+  } else {
+    pill.textContent = "🔕 Ogolaanshaha ogeysiisyada: LAMA OGOLAYN";
+    pill.className = "status-pill off";
+  }
+}
+
+function log(msg){
+  const box = document.getElementById('logBox');
+  const time = new Date().toLocaleTimeString('so-SO');
+  box.innerHTML = `[${time}] ${msg}<br>` + box.innerHTML;
+}
+
+// ---------- SERVICE WORKER ----------
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('./sw.js').then(reg=>{
+    log("Service worker waa la diirtay ✅");
+    // Best-effort periodic background sync (Chrome/Android installed PWA only)
+    if('periodicSync' in reg){
+      navigator.permissions.query({name:'periodic-background-sync'}).then(status=>{
+        if(status.state === 'granted'){
+          reg.periodicSync.register('daryeelka-aabe-check', {minInterval: 15*60*1000}).catch(()=>{});
+        }
+      }).catch(()=>{});
+    }
+  }).catch(err=>{
+    log("Service worker ma shaqeynin (u baahan yahay HTTPS ama localhost): " + err.message);
+  });
+}
+
+// ---------- INIT ----------
+if('Notification' in window){ updatePermPill(); }
+renderTables();
+refresh();
+setInterval(refresh, 30000); // update display every 30s
+
+// Marka app-ku horta soo galo (ama la geli/refresh gareeyo), haddii ogolaanshaha
+// horey loo siiyay, isla markiiba magaca qofka joogitaanka ah waa la sheegayaa
+// iyada oo aan loo baahnayn in badhanka la taabto.
+if('Notification' in window && Notification.permission === 'granted'){
+  announceCurrent();
+  scheduleNextTimer();
+}
+</script>
+
+</body>
+</html>
