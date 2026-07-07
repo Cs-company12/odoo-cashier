@@ -1140,7 +1140,7 @@ const DB = {
         data.forEach(row=>{
           if(!row?.key) return;
           const value = row.value;
-          try{localStorage.setItem(row.key,JSON.stringify(value));}catch(err){console.warn('DB cache write failed',row.key,err);}
+          try{ls_set(row.key,value);}catch(err){console.warn('DB cache write failed',row.key,err);}
         });
       }
       this.enabled = true;
@@ -1160,11 +1160,26 @@ const STORAGE_FALLBACK = {};
 function storageAvailable(type='localStorage'){
   try{
     const storage = window[type];
+    if(!storage) return false;
     const testKey = '__bax_storage_test__';
     storage.setItem(testKey, '1');
     storage.removeItem(testKey);
     return true;
   }catch{return false;}
+}
+function readWindowNameStore(){
+  try{
+    const raw = window.name || '';
+    if(raw.startsWith('__bax_store__')){
+      return JSON.parse(raw.slice('__bax_store__'.length));
+    }
+  }catch{}
+  return {};
+}
+function writeWindowNameStore(store){
+  try{
+    window.name = '__bax_store__' + JSON.stringify(store);
+  }catch{}
 }
 function getStorageBackend(){
   if(storageAvailable('localStorage')) return localStorage;
@@ -1177,10 +1192,13 @@ function ls_get(k,def=[]){
     if(storage){
       const d = storage.getItem(k);
       if(d===null){
-        return STORAGE_FALLBACK[k] !== undefined ? STORAGE_FALLBACK[k] : def;
+        const fallbackStore = readWindowNameStore();
+        return fallbackStore[k] !== undefined ? fallbackStore[k] : (STORAGE_FALLBACK[k] !== undefined ? STORAGE_FALLBACK[k] : def);
       }
       try{return JSON.parse(d);}catch{return def;}
     }
+    const fallbackStore = readWindowNameStore();
+    if(fallbackStore[k] !== undefined) return fallbackStore[k];
     if(STORAGE_FALLBACK[k] !== undefined) return STORAGE_FALLBACK[k];
     return def;
   }catch{return def;}
@@ -1194,6 +1212,9 @@ function ls_set(k,d){
     } else {
       STORAGE_FALLBACK[k]=d;
     }
+    const fallbackStore = readWindowNameStore();
+    fallbackStore[k] = d;
+    writeWindowNameStore(fallbackStore);
   }catch(err){STORAGE_FALLBACK[k]=d;console.warn('Storage save failed',err);}
   if(DB.enabled) DB.persist(k,d);
   return true;
@@ -1203,6 +1224,9 @@ function ls_remove(k){
   if(storage){
     try{storage.removeItem(k);}catch(err){console.warn('Storage remove failed',err);}
   }
+  const fallbackStore = readWindowNameStore();
+  delete fallbackStore[k];
+  writeWindowNameStore(fallbackStore);
   delete STORAGE_FALLBACK[k];
 }
 async function hashPw(pw,salt){
