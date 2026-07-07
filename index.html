@@ -7,6 +7,22 @@
 <link rel="icon" type="image/png" href="https://github.com/Cs-company12/DOCTOR-PANAL/blob/main/download.jpeg?raw=true">
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+  window.__BAX_ALERT_FALLBACK__ = function(options){
+    const title = (options && (options.title || options.text || options.html)) ? (options.title || '') : '';
+    const message = [title, options && options.text ? options.text : '', options && options.html ? options.html : ''].filter(Boolean).join('\n\n');
+    if(typeof window.alert === 'function'){
+      window.alert(message || 'Action completed');
+    }
+    return Promise.resolve({ isConfirmed: true, isDismissed: false, value: undefined });
+  };
+  if(!window.Swal){
+    window.Swal = { fire: window.__BAX_ALERT_FALLBACK__ };
+  }
+  if(location.protocol === 'file:') {
+    console.warn('This app is being opened from a file URL. For best browser compatibility, serve it from http://localhost or https.');
+  }
+</script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
 <style>
 :root {
