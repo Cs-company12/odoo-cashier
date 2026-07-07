@@ -1211,7 +1211,13 @@ function ls_get(k,def=[]){
         const fallbackStore = readWindowNameStore();
         return fallbackStore[k] !== undefined ? fallbackStore[k] : (STORAGE_FALLBACK[k] !== undefined ? STORAGE_FALLBACK[k] : def);
       }
-      try{return JSON.parse(d);}catch{return def;}
+      try{
+        const parsed = JSON.parse(d);
+        if(!parsed || (Array.isArray(parsed) && parsed.length === 0 && typeof def === 'object' && Array.isArray(def))) {
+          if(STORAGE_FALLBACK[k] !== undefined && Array.isArray(STORAGE_FALLBACK[k]) && STORAGE_FALLBACK[k].length > 0) return STORAGE_FALLBACK[k];
+        }
+        return parsed;
+      }catch{return def;}
     }
     const fallbackStore = readWindowNameStore();
     if(fallbackStore[k] !== undefined) return fallbackStore[k];
@@ -1224,14 +1230,22 @@ function ls_set(k,d){
     const payload = JSON.stringify(d);
     const storage = getStorageBackend();
     if(storage){
-      try{storage.setItem(k,payload);}catch(err){STORAGE_FALLBACK[k]=d;console.warn('Storage write failed, using fallback', err);} 
+      try{
+        storage.setItem(k,payload);
+      }catch(err){
+        STORAGE_FALLBACK[k]=d;
+        console.warn('Storage write failed, using fallback', k, err);
+      } 
     } else {
       STORAGE_FALLBACK[k]=d;
     }
     const fallbackStore = readWindowNameStore();
     fallbackStore[k] = d;
     writeWindowNameStore(fallbackStore);
-  }catch(err){STORAGE_FALLBACK[k]=d;console.warn('Storage save failed',err);}
+  }catch(err){
+    STORAGE_FALLBACK[k]=d;
+    console.warn('Storage save failed',k,err);
+  }
   if(DB.enabled) DB.persist(k,d);
   return true;
 }
@@ -1582,10 +1596,71 @@ const HOSP = {
   editId:null,
   payMode:null,
 
-  getChargesForDoctor(doctorName){
-    if(!doctorName) return {};
-    return this.DOCTOR_CHARGES[doctorName] || this.DOCTOR_CHARGES['_default'];
+  // Diagnostic and recovery function
+  verifyAndRestoreData(){
+    const appts = ls_get(this.K.APPTS);
+    const patients = ls_get(this.K.PATIENTS);
+    let fixed = false;
+    
+    // Fix 1: Ensure all appts have patientId linked to a real patient
+    appts.forEach(appt => {
+      if(!appt.patientId && appt.patientName){
+        const match = this.findPatientMatch(patients, appt.patientName, appt.mobile);
+        if(match){
+          appt.patientId = match.id;
+          fixed = true;
+        } else {
+          const newPatient = {
+            id: gid('P'),
+            name: appt.patientName,
+            mobile: appt.mobile || '',
+            sex: appt.sex || '',
+            age: appt.patientAge || '',
+            dob: appt.patientDob || '',
+            address: appt.patientAddress || '',
+            history: appt.patientNotes || '',
+            createdAt: appt.createdAt || new Date().toISOString()
+          };
+          patients.unshift(newPatient);
+          appt.patientId = newPatient.id;
+          fixed = true;
+        }
+      }
+    });
+    
+    // Fix 2: Ensure all patients have valid IDs
+    patients.forEach((p, idx) => {
+      if(!p.id){
+        p.id = gid('P');
+        fixed = true;
+      }
+    });
+    
+    // Fix 3: Remove duplicate patients by name+mobile
+    const seen = new Set();
+    const deduplicated = [];
+    patients.forEach(p => {
+      const key = `${this.normalizePatientName(p.name)}::${this.normalizePhone(p.mobile)}`;
+      if(!seen.has(key)){
+        seen.add(key);
+        deduplicated.push(p);
+      }
+    });
+    if(deduplicated.length < patients.length){
+      patients.length = 0;
+      deduplicated.forEach(p => patients.push(p));
+      fixed = true;
+    }
+    
+    if(fixed){
+      ls_set(this.K.APPTS, appts);
+      ls_set(this.K.PATIENTS, patients);
+      console.info('Data recovery: Fixed and synchronized patient records');
+    }
+    return { appts: appts.length, patients: patients.length, fixed };
   },
+
+
 
   async init(){
     const users=ls_get(this.K.USERS);
@@ -1816,6 +1891,11 @@ const HOSP = {
     document.querySelectorAll('#hospTopNav .tnav-btn').forEach(b=>b.classList.remove('active'));
     const t=$(vid);if(t)t.classList.add('active');
     const b=document.querySelector('#hospTopNav [data-v="'+vid+'"]');if(b)b.classList.add('active');
+    
+    // Always ensure data is synchronized before rendering
+    this.syncPatientsFromAppointments();
+    this.verifyAndRestoreData();
+    
     if(vid==='hv-dashboard')this.renderDash();
     if(vid==='hv-appointments')this.renderAppts();
     if(vid==='hv-payments')this.renderPayments();
@@ -2068,10 +2148,14 @@ const HOSP = {
   findPatientMatch(patients, patientName, mobile){
     const qName = this.normalizePatientName(patientName);
     const qMobile = this.normalizePhone(mobile);
+    if(!qName && !qMobile) return null;
     return patients.find(p => {
+      if(!p.name && !p.mobile) return false;
       const existingName = this.normalizePatientName(p.name);
       const existingMobile = this.normalizePhone(p.mobile);
-      return (qName && existingName && existingName === qName) || (qMobile && existingMobile && existingMobile === qMobile);
+      if(qName && existingName && existingName === qName) return true;
+      if(qMobile && qMobile.length > 0 && existingMobile && existingMobile === qMobile) return true;
+      return false;
     }) || null;
   },
 
@@ -2188,21 +2272,27 @@ Thank you.`;
       return;
     }
     const appts=ls_get(this.K.APPTS);
+    const patients=ls_get(this.K.PATIENTS);
     const now=new Date();
+    const patientRecord=this.ensurePatient(fd);
+    const patientId=patientRecord ? patientRecord.id : '';
     if(this.editId){
       const idx=appts.findIndex(a=>a.id===this.editId);
-      if(idx!==-1) appts[idx]={...appts[idx],...fd,updatedAt:now.toISOString()};
+      if(idx!==-1){
+        appts[idx]={...appts[idx],...fd,patientId:patientId||appts[idx].patientId||'',updatedAt:now.toISOString()};
+      }
       ls_set(this.K.APPTS,appts);
+      this.syncPatientsFromAppointments();
       Swal.fire({icon:'success',title:'Saved',timer:1200,showConfirmButton:false});
     } else {
       const queueNum = this.getNextQueueNum(fd.doctor);
       const apptNum='AP'+String(40000+appts.length+1).padStart(6,'0');
       const newAppt={
         id:gid('A'),apptNum,queueNum,...fd,
-        patientId:'ID'+String(30000+ls_get(this.K.PATIENTS).length+1).padStart(7,'0'),
+        patientId,
         state:'draft',paymentMethod:'Cash',
         createdAt:now.toISOString(),
-        cashier:this.cur.username,
+        cashier:this.cur?.username||'cashier',
         lastVisitDate:'',lastVisitDoctor:''
       };
       const prev=appts.filter(a=>a.mobile&&a.mobile===fd.mobile&&a.patientName===fd.patientName)
@@ -2214,6 +2304,9 @@ Thank you.`;
       appts.unshift(newAppt);
       this.editId=newAppt.id;
       ls_set(this.K.APPTS,appts);
+      ls_set(this.K.PATIENTS,patients);
+      this.syncPatientsFromAppointments();
+      this.createFollowupRecord(newAppt);
       $('hApptNumDisp').textContent=apptNum;
       $('hQueueDisp').textContent=queueNum;
       $('hFormTitle').textContent=apptNum;
@@ -2223,19 +2316,49 @@ Thank you.`;
       Swal.fire({icon:'success',title:'Appointment Created',text:'Queue #'+queueNum,timer:1500,showConfirmButton:false});
       this.sendQueueToWhatsApp(newAppt);
     }
-    this.ensurePatient(fd);
   },
 
   syncPatientsFromAppointments(){
     const appts = ls_get(this.K.APPTS);
     const patients = ls_get(this.K.PATIENTS);
-    const existingIds = new Set(patients.map(p => p.id).filter(Boolean));
+    let changed = false;
     appts.forEach(appt => {
       if(!appt?.patientName) return;
-      const existing = this.findPatientMatch(patients, appt.patientName, appt.mobile);
-      if(existing) return;
-      patients.unshift({
-        id: gid('P'),
+      let existing = this.findPatientMatch(patients, appt.patientName, appt.mobile);
+      if(existing){
+        if(!appt.patientId && existing.id){
+          appt.patientId = existing.id;
+          changed = true;
+        }
+        if((appt.mobile || '') && existing.mobile !== appt.mobile){
+          existing.mobile = appt.mobile || existing.mobile || '';
+          changed = true;
+        }
+        if((appt.sex || '') && existing.sex !== appt.sex){
+          existing.sex = appt.sex || existing.sex || '';
+          changed = true;
+        }
+        if((appt.patientAge !== '' && appt.patientAge !== undefined && appt.patientAge !== null) && existing.age !== appt.patientAge){
+          existing.age = appt.patientAge;
+          changed = true;
+        }
+        if((appt.patientDob || '') && existing.dob !== appt.patientDob){
+          existing.dob = appt.patientDob || existing.dob || '';
+          changed = true;
+        }
+        if((appt.patientAddress || '') && existing.address !== appt.patientAddress){
+          existing.address = appt.patientAddress || existing.address || '';
+          changed = true;
+        }
+        if((appt.patientNotes || '') && existing.notes !== appt.patientNotes){
+          existing.history = appt.patientNotes || existing.history || '';
+          existing.notes = appt.patientNotes || existing.notes || '';
+          changed = true;
+        }
+        return;
+      }
+      const newPatient = {
+        id: appt.patientId || gid('P'),
         name: appt.patientName,
         mobile: appt.mobile || '',
         sex: appt.sex || '',
@@ -2247,50 +2370,59 @@ Thank you.`;
         history: appt.patientNotes || '',
         notes: appt.patientNotes || '',
         createdAt: appt.createdAt || new Date().toISOString()
-      });
-      existingIds.add(patients[0].id);
+      };
+      patients.unshift(newPatient);
+      appt.patientId = newPatient.id;
+      changed = true;
     });
-    if(patients.length) ls_set(this.K.PATIENTS, patients);
+    if(changed){
+      ls_set(this.K.PATIENTS, patients);
+      ls_set(this.K.APPTS, appts);
+    }
   },
 
   ensurePatient(fd){
-    if(!fd.patientName) return;
+    if(!fd.patientName) return null;
     const patients=ls_get(this.K.PATIENTS);
     const exists=this.findPatientMatch(patients, fd.patientName, fd.mobile);
     const now = new Date().toISOString();
+    const numericAge = /^\s*\d+\s*$/.test(String(fd.patientAge)) ? parseInt(fd.patientAge,10) : '';
     if(exists){
-      exists.name = fd.patientName || exists.name;
-      if(fd.mobile) exists.mobile = fd.mobile;
-      exists.sex = fd.sex || exists.sex;
-      exists.dob = fd.patientDob || exists.dob || '';
-      exists.address = fd.patientAddress || exists.address || '';
-      exists.emergencyContactPhone = fd.emergencyContactPhone || exists.emergencyContactPhone || '';
+      let changed = false;
+      if(fd.patientName && fd.patientName !== exists.name){ exists.name = fd.patientName; changed = true; }
+      if(fd.mobile && fd.mobile !== exists.mobile){ exists.mobile = fd.mobile; changed = true; }
+      if(fd.sex && fd.sex !== exists.sex){ exists.sex = fd.sex; changed = true; }
+      if(fd.patientDob && fd.patientDob !== exists.dob){ exists.dob = fd.patientDob; changed = true; }
+      if(fd.patientAddress && fd.patientAddress !== exists.address){ exists.address = fd.patientAddress; changed = true; }
+      if(fd.emergencyContactPhone && fd.emergencyContactPhone !== exists.emergencyContactPhone){ exists.emergencyContactPhone = fd.emergencyContactPhone; changed = true; }
       if(fd.patientAge!==''&&fd.patientAge!==null&&fd.patientAge!==undefined){
-        const numericAge = /^\s*\d+\s*$/.test(String(fd.patientAge)) ? parseInt(fd.patientAge,10) : NaN;
-        if(!isNaN(numericAge)){
-          exists.age = numericAge || exists.age || '';
+        if(!isNaN(numericAge) && numericAge !== '' && numericAge !== exists.age){
+          exists.age = numericAge;
           exists.ageDate = now;
+          changed = true;
         }
       }
-      if(fd.patientNotes) {
-        exists.history = fd.patientNotes;
-        exists.notes = fd.patientNotes;
+      if((fd.patientNotes !== undefined && fd.patientNotes !== exists.history)){
+        exists.history = fd.patientNotes || exists.history || '';
+        exists.notes = fd.patientNotes || exists.notes || '';
+        changed = true;
       }
-      if(!exists.createdAt) exists.createdAt = now;
-      ls_set(this.K.PATIENTS,patients);
-    } else {
-      const numericAge = /^\s*\d+\s*$/.test(String(fd.patientAge)) ? parseInt(fd.patientAge,10) : '';
-      patients.unshift({
-        id:gid('P'),name:fd.patientName,mobile:fd.mobile,
-        sex:fd.sex,age:numericAge,
-        dob:fd.patientDob||'',address:fd.patientAddress||'',
-        emergencyContactPhone:fd.emergencyContactPhone||'',
-        ageDate:numericAge!==''?now:'',
-        history:fd.patientNotes,notes:fd.patientNotes,
-        createdAt:now
-      });
-      ls_set(this.K.PATIENTS,patients);
+      if(!exists.createdAt) { exists.createdAt = now; changed = true; }
+      if(changed) ls_set(this.K.PATIENTS,patients);
+      return exists;
     }
+    const newPatient = {
+      id:gid('P'),name:fd.patientName,mobile:fd.mobile||'',
+      sex:fd.sex||'',age:numericAge||'',
+      dob:fd.patientDob||'',address:fd.patientAddress||'',
+      emergencyContactPhone:fd.emergencyContactPhone||'',
+      ageDate:numericAge!==''?now:'',
+      history:fd.patientNotes||'',notes:fd.patientNotes||'',
+      createdAt:now
+    };
+    patients.unshift(newPatient);
+    ls_set(this.K.PATIENTS,patients);
+    return newPatient;
   },
 
   confirmAppt(){
@@ -2301,6 +2433,7 @@ Thank you.`;
     if(idx!==-1){
       appts[idx].state='scheduled';
       ls_set(this.K.APPTS,appts);
+      this.syncPatientsFromAppointments();
       this.createFollowupRecord(appts[idx]);
     }
     $('hBtnConfirm').style.display='none';
@@ -2329,19 +2462,20 @@ Thank you.`;
     const matches=patients.filter(p=>{
       const hay=`${p.name||''} ${p.mobile||''} ${p.id||''}`.toLowerCase();
       return hay.includes(qn);
-    }).slice(0,8);
+    }).slice(0,10);
     if(!matches.length){
       drop.innerHTML=`<div class="autocomplete-action" onclick="HOSP.createPatient('${q.replace(/'/g,'\\\'')}')" ><i class="bi bi-plus"></i> Create "${q}"</div>`;
-    } else {
-      drop.innerHTML=matches.map(p=>{
-        const age = HOSP.getCurrentPatientAge(p);
-        return `
-        <div class="autocomplete-item" onclick="HOSP.selectPatient('${p.id}')">
-          <strong>${p.name}</strong><span class="sub"> — ${p.mobile||''} ${p.sex?'· '+p.sex:''} ${age!==''?'· Age '+age:''}</span>
-        </div>`;
-      }).join('')+
-        `<div class="autocomplete-action" onclick="HOSP.createPatient('${q.replace(/'/g,'\\\'')}')" ><i class="bi bi-plus"></i> Create new: "${q}"</div>`;
+      drop.style.display='';
+      return;
     }
+    drop.innerHTML=matches.map(p=>{
+      const age = HOSP.getCurrentPatientAge(p);
+      const ageStr = age!=='' ? (typeof age === 'number' ? ('Age '+age) : age) : '';
+      return `<div class="autocomplete-item" onclick="HOSP.selectPatient('${p.id}')">
+        <strong>${p.name||'—'}</strong><span class="sub"> — ${p.mobile||'—'} ${p.sex?'· '+p.sex:''} ${ageStr?'· '+ageStr:''}</span>
+      </div>`;
+    }).join('')+
+      `<div class="autocomplete-action" onclick="HOSP.createPatient('${q.replace(/'/g,'\\\'')}')" ><i class="bi bi-plus"></i> Create new: "${q}"</div>`;
     drop.style.display='';
   },
 
@@ -2446,18 +2580,30 @@ Thank you.`;
   },
 
   selectPatient(pid){
-    const p=ls_get(this.K.PATIENTS).find(x=>x.id===pid);if(!p)return;
-    $('hPatientInput').value=p.name;
+    const p=ls_get(this.K.PATIENTS).find(x=>x.id===pid);
+    if(!p){
+      console.warn('Patient not found:', pid);
+      return;
+    }
+    $('hPatientInput').value=p.name||'';
     $('hPatientMobile').value=p.mobile||'';
     const currentAge = this.getCurrentPatientAge(p);
-    $('hPatientAge').value=currentAge !== '' ? currentAge : '';
+    if(typeof currentAge === 'number'){
+      $('hPatientAge').value=String(currentAge);
+    } else {
+      $('hPatientAge').value=currentAge||'';
+    }
     $('hPatientSex').value=p.sex||'';
     $('hPatientDob').value=p.dob||'';
     $('hPatientAddress').value=p.address||'';
-    if(p.notes||p.history) $('hPatientNotes').value=p.notes||p.history;
+    if(p.notes||p.history) $('hPatientNotes').value=p.notes||p.history||'';
     $('hPatientDrop').style.display='none';
     const appts=ls_get(this.K.APPTS)
-      .filter(a=>this.normalizePhone(a.mobile)===this.normalizePhone(p.mobile)||a.patientName===p.name)
+      .filter(a=>{
+        const aPhone = this.normalizePhone(a.mobile);
+        const pPhone = this.normalizePhone(p.mobile);
+        return (aPhone && pPhone && aPhone===pPhone) || (a.patientName && a.patientName===p.name);
+      })
       .sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
     if(appts.length){
       const last=appts[0];
@@ -2526,6 +2672,7 @@ Thank you.`;
     appts[idx].paymentMethod=this.payMode==='cash'?'Cash':'Credit';
     appts[idx].paidAt=new Date().toISOString();
     ls_set(this.K.APPTS,appts);
+    this.syncPatientsFromAppointments();
     this.createFollowupRecord(appts[idx]);
     $('hBtnCredit').style.display='none';
     $('hBtnCash').style.display='none';
@@ -2543,11 +2690,18 @@ Thank you.`;
     const appts=ls_get(this.K.APPTS);
     const idx=appts.findIndex(a=>a.id===this.editId);
     if(idx===-1) return;
-    appts[idx].state='paid';appts[idx].paid=0;appts[idx].paymentMethod='Free';appts[idx].paidAt=new Date().toISOString();
+    appts[idx].state='paid';
+    appts[idx].paid=0;
+    appts[idx].paymentMethod='Free';
+    appts[idx].paidAt=new Date().toISOString();
     ls_set(this.K.APPTS,appts);
+    this.syncPatientsFromAppointments();
     this.createFollowupRecord(appts[idx]);
-    $('hBtnCredit').style.display='none';$('hBtnCash').style.display='none';$('hBtnFree').style.display='none';
-    $('hPaidRow').style.display='';$('hPaidAmt').textContent='$0.00 (FREE)';
+    $('hBtnCredit').style.display='none';
+    $('hBtnCash').style.display='none';
+    $('hBtnFree').style.display='none';
+    $('hPaidRow').style.display='';
+    $('hPaidAmt').textContent='$0.00 (FREE)';
     this.setStateBar('paid');
     Swal.fire({icon:'success',title:'Marked as Free',timer:1200,showConfirmButton:false});
   },
@@ -2772,23 +2926,28 @@ Thank you.`;
     const followups = ls_get(this.K.FOLLOWUPS);
     const exists = followups.find(f => f.apptId === appt.id);
     if(exists) return;
-    const visitDate = new Date(appt.apptDate);
-    const dueDate = new Date(visitDate);
-    dueDate.setDate(dueDate.getDate() + 30);
-    const followup = {
-      id: gid('FU'),
-      apptId: appt.id,
-      patientName: appt.patientName,
-      phone: appt.mobile || '',
-      doctor: appt.doctor || '',
-      visitDate: appt.apptDate,
-      dueDate: dueDate.toISOString(),
-      status: 'pending',
-      messageSentDate: null,
-      createdAt: new Date().toISOString()
-    };
-    followups.push(followup);
-    ls_set(this.K.FOLLOWUPS, followups);
+    try{
+      const visitDate = new Date(appt.apptDate);
+      const dueDate = new Date(visitDate);
+      dueDate.setDate(dueDate.getDate() + 30);
+      const followup = {
+        id: gid('FU'),
+        apptId: appt.id,
+        patientName: appt.patientName,
+        patientId: appt.patientId || '',
+        phone: appt.mobile || '',
+        doctor: appt.doctor || '',
+        visitDate: appt.apptDate,
+        dueDate: dueDate.toISOString(),
+        status: 'pending',
+        messageSentDate: null,
+        createdAt: new Date().toISOString()
+      };
+      followups.push(followup);
+      ls_set(this.K.FOLLOWUPS, followups);
+    } catch(err){
+      console.error('Error creating followup record:', err);
+    }
   },
 
   renderFollowup(){
