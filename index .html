@@ -1156,8 +1156,55 @@ const DB = {
   }
 };
 
-function ls_get(k,def=[]){try{const d=localStorage.getItem(k);return d?JSON.parse(d):def;}catch{return def;}}
-function ls_set(k,d){localStorage.setItem(k,JSON.stringify(d));if(DB.enabled)DB.persist(k,d);}
+const STORAGE_FALLBACK = {};
+function storageAvailable(type='localStorage'){
+  try{
+    const storage = window[type];
+    const testKey = '__bax_storage_test__';
+    storage.setItem(testKey, '1');
+    storage.removeItem(testKey);
+    return true;
+  }catch{return false;}
+}
+function getStorageBackend(){
+  if(storageAvailable('localStorage')) return localStorage;
+  if(storageAvailable('sessionStorage')) return sessionStorage;
+  return null;
+}
+function ls_get(k,def=[]){
+  try{
+    const storage = getStorageBackend();
+    if(storage){
+      const d = storage.getItem(k);
+      if(d===null){
+        return STORAGE_FALLBACK[k] !== undefined ? STORAGE_FALLBACK[k] : def;
+      }
+      try{return JSON.parse(d);}catch{return def;}
+    }
+    if(STORAGE_FALLBACK[k] !== undefined) return STORAGE_FALLBACK[k];
+    return def;
+  }catch{return def;}
+}
+function ls_set(k,d){
+  try{
+    const payload = JSON.stringify(d);
+    const storage = getStorageBackend();
+    if(storage){
+      try{storage.setItem(k,payload);}catch(err){STORAGE_FALLBACK[k]=d;console.warn('Storage write failed, using fallback', err);} 
+    } else {
+      STORAGE_FALLBACK[k]=d;
+    }
+  }catch(err){STORAGE_FALLBACK[k]=d;console.warn('Storage save failed',err);}
+  if(DB.enabled) DB.persist(k,d);
+  return true;
+}
+function ls_remove(k){
+  const storage = getStorageBackend();
+  if(storage){
+    try{storage.removeItem(k);}catch(err){console.warn('Storage remove failed',err);}
+  }
+  delete STORAGE_FALLBACK[k];
+}
 async function hashPw(pw,salt){
   try{
     const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(pw+salt));
@@ -1514,15 +1561,15 @@ const HOSP = {
     try{
       const appts = ls_get(this.K.APPTS);
       const patients = ls_get(this.K.PATIENTS);
-      const shouldSeed = !localStorage.getItem('bax_preload_seeded_v2') || (!patients.length && appts.length) || (!appts.length && typeof PRELOAD_PATIENT_LIST !== 'undefined' && PRELOAD_PATIENT_LIST && PRELOAD_PATIENT_LIST.indexOf('__PRELOAD') === -1);
+      const shouldSeed = !ls_get('bax_preload_seeded_v2') || (!patients.length && appts.length) || (!appts.length && typeof PRELOAD_PATIENT_LIST !== 'undefined' && PRELOAD_PATIENT_LIST && PRELOAD_PATIENT_LIST.indexOf('__PRELOAD') === -1);
       if(shouldSeed){
         await this.importPreloadedList();
-        localStorage.setItem('bax_preload_seeded_v2','1');
+        ls_set('bax_preload_seeded_v2','1');
       }
       this.syncPatientsFromAppointments();
     }catch(err){console.warn('Preload import failed',err);}
 
-    const sess=localStorage.getItem(this.K.SESSION);
+    const sess=ls_get(this.K.SESSION, null);
     if(sess){const u=ls_get(this.K.USERS).find(x=>x.username===sess);if(u){this.cur=u;this.showApp();return;}}
     this.showLogin();
   },
@@ -1660,10 +1707,10 @@ const HOSP = {
   },
 
   forceReimport(){
-    localStorage.removeItem('bax_preload_seeded_v2');
-    localStorage.removeItem(this.K.APPTS);
+    ls_remove('bax_preload_seeded_v2');
+    ls_remove(this.K.APPTS);
     this.importPreloadedList().then(()=>{
-      localStorage.setItem('bax_preload_seeded_v2','1');
+      ls_set('bax_preload_seeded_v2','1');
       const appts = ls_get(this.K.APPTS);
       const patients = ls_get(this.K.PATIENTS);
       const summary = `✅ IMPORT COMPLETE\n📋 Appointments: ${appts.length}\n👥 Patients: ${patients.length}`;
@@ -1691,7 +1738,7 @@ const HOSP = {
       al.textContent='Invalid username or password';al.classList.remove('d-none');return;
     }
     al.classList.add('d-none');
-    this.cur=user;localStorage.setItem(this.K.SESSION,u);
+    this.cur=user;ls_set(this.K.SESSION,u);
     this.showApp();
     Swal.fire({icon:'success',title:'Welcome, '+u,timer:1200,showConfirmButton:false});
   },
@@ -1699,7 +1746,7 @@ const HOSP = {
   logout(){
     Swal.fire({title:'Logout?',icon:'question',showCancelButton:true}).then(r=>{
       if(!r.isConfirmed)return;
-      localStorage.removeItem(this.K.SESSION);this.cur=null;
+      ls_remove(this.K.SESSION);this.cur=null;
       $('hospitalLogin').style.display='';$('hospitalApp').style.display='none';
       $('hLoginUser').value='';$('hLoginPass').value='';
     });
@@ -3131,7 +3178,7 @@ const LAB = window.LAB = {
         {id:gid('U'),username:'cashier',password:await hashPw('cashier123','_lab_'),role:'cashier'}
       ]);
     }
-    const sess=localStorage.getItem(this.K.SESSION);
+    const sess=ls_get(this.K.SESSION, null);
     if(sess){const u=this.load(this.K.USERS).find(x=>x.username===sess);if(u){this.cur=u;this.showApp();return;}}
     this.showLogin();
   },
@@ -3153,7 +3200,7 @@ const LAB = window.LAB = {
       al.textContent='Invalid credentials';al.classList.remove('d-none');return;
     }
     al.classList.add('d-none');
-    this.cur=user;localStorage.setItem(this.K.SESSION,u);
+    this.cur=user;ls_set(this.K.SESSION,u);
     this.showApp();
     Swal.fire({icon:'success',title:'Welcome '+u,timer:1200,showConfirmButton:false});
   },
@@ -3161,7 +3208,7 @@ const LAB = window.LAB = {
   logout(){
     Swal.fire({title:'Logout?',icon:'question',showCancelButton:true}).then(r=>{
       if(!r.isConfirmed)return;
-      localStorage.removeItem(this.K.SESSION);this.cur=null;
+      ls_remove(this.K.SESSION);this.cur=null;
       $('labLogin').style.display='';$('labApp').style.display='none';
     });
   },
