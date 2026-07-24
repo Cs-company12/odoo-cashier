@@ -79,7 +79,7 @@ const jsDayToIndex = { 6: 0, 0: 1, 1: 2, 2: 3, 3: 4, 4: 5, 5: 6 }; // Sat=0 ... 
 const baseSchedule = {
   "Sabti":   { maalin: "Ibraheem Abdulkader", galab: "Mustafe", habeen: "Cumar" },
   "Axad":    { maalin: "Haaruun", galab: "Cumar", habeen: "Ugaas Maxamuud" },
-  "Isniin":  { maalin: "Cumar", galab: "Ciise", habeen: "Ibraheem Abdulkader" },
+  "Isniin":  { maalin: "Cumar", galab: "Ibraheem Abdulkader", habeen: "Ibraheem Abdulkader" },
   "Talaado": { maalin: "Mustafe", galab: "Ciise", habeen: "Haaruun" },
   "Arbaco":  { maalin: "Cumar", galab: "Mustafe", habeen: "Ciise" },
   "Khamiis": { maalin: "Haaruun", galab: "Cumar", habeen: "Mustafe" },
