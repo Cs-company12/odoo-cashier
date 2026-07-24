@@ -162,6 +162,17 @@
 </head>
 <body>
 
+<!-- MODAL: la weydiiyo magaca isticmaalaha markii ugu horeysa app-ku la furo -->
+<div id="whoAmIModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:999;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:#fff;border-radius:18px;padding:22px;max-width:340px;width:100%;box-shadow:0 8px 30px rgba(0,0,0,.3);">
+    <p style="font-weight:700;color:#1e5c2f;font-size:1.05rem;margin:0 0 8px;">👋 Yaad tahay?</p>
+    <p style="font-size:.85rem;color:#555;margin:0 0 14px;">Dooro magacaaga si ogeysiisyadu kuu gaadhaan gaar ahaan marka ay yahay wakhtigaaga.</p>
+    <select id="whoAmISelect" style="width:100%;padding:10px;border-radius:8px;border:1px solid #ccc;font-size:.9rem;margin-bottom:14px;">
+    </select>
+    <button style="width:100%;" onclick="confirmWhoAmI()">✅ Xaqiiji</button>
+  </div>
+</div>
+
 <header>
   <h1>🕊️ Jadwalka Daryeelka Aabe</h1>
   <p>Xasusinta cod leh — qofka joogitaanka ah</p>
@@ -181,24 +192,24 @@
     <button onclick="enableAll()">🔔 Daar Ogeysiisyada + Cod</button>
     <button class="secondary" onclick="testAlert()">🔊 Tijaabi Codka Hadda</button>
   </div>
+  <div class="row" style="margin-top:6px;">
+    <span style="font-size:.78rem;color:#456;">👤 Adiga waa: <b id="myNameLabel">--</b></span>
+    <button class="secondary" style="padding:4px 10px;font-size:.75rem;" onclick="openWhoAmI()">✏️ Beddel</button>
+  </div>
+  <div class="row" id="waRow" style="display:none;margin-top:6px;">
+    <button class="gold" onclick="sendWhatsAppUpdate()">📲 U Dir WhatsApp: Waan La Joogaa</button>
+  </div>
 </div>
 
 <div class="card">
   <p class="section-title">⚙️ Dejinta</p>
-  <p class="sub">Dooro toddobaadka hadda socda iyo inta jeer ee cod-xasuusinta la soo celinayo habeenkii.</p>
+  <p class="sub">Dooro inta jeer ee cod-xasuusinta la soo celinayo habeenkii. Toddobaadka wuu is-beddelaa otomaatig ah asboowc kasta (Xaaris ↔ Yaxye), mana u baahna in gacanta lagu beddelo.</p>
 
-  <div id="settingsLock" class="row" style="justify-content:flex-start;">
-    <input type="password" id="settingsPassword" placeholder="Password si aad wax uga badasho" autocomplete="off" style="padding:9px 12px;border-radius:8px;border:1px solid #ccc;font-size:.9rem;">
-    <button onclick="unlockSettings()">🔓 Fur Dejinta</button>
-  </div>
-  <div class="errMsg" id="settingsError" style="color:#c62828;font-size:.8rem;min-height:16px;"></div>
-
-  <div id="settingsFields" style="display:none;margin-top:10px;">
-    <label class="field-label">Toddobaadka Hadda (habeenka Jimcaha):</label>
-    <select id="weekSelect" onchange="saveWeek()">
-      <option value="1">Toddobaadka 1 — Dr. Xaaris</option>
-      <option value="2" selected>Toddobaadka 2 — Dr. Yaxye</option>
-    </select>
+  <div id="settingsFields" style="margin-top:10px;">
+    <label class="field-label">Toddobaadka Hadda (habeenka Jimcaha) — otomaatig ahaan ayuu isu beddelaa, lama taaban karo gacanta:</label>
+    <div style="background:var(--green-light);border:1px solid #cfe3cf;border-radius:10px;padding:10px 12px;font-weight:700;color:var(--green-dark);font-size:.9rem;" id="weekDisplay">
+      Toddobaadka 2 — Dr. Yaxye
+    </div>
 
     <div style="margin-top:12px;">
       <label class="field-label">Cod-xasuusinta habeenka (Habeen) — inta jeer:</label>
@@ -220,7 +231,7 @@
     </div>
 
     <p class="sub" style="margin-top:14px;">
-      ✏️ Dejinta waa la fureen — hadda waxaad si toos ah uga beddeli kartaa magacyada jadwalka labada
+      ✏️ Waxaad si toos ah uga beddeli kartaa magacyada jadwalka labada
       miis hoose (taabo goobta magaca, isbeddel, kadibna riix "Kaydi Isbadelada").
     </p>
   </div>
@@ -236,13 +247,14 @@
   <table id="table2"></table>
 </div>
 
-<div class="card" id="saveEditsCard" style="display:none;">
+<div class="card" id="saveEditsCard">
   <p class="section-title">✏️ Kaydinta Isbadelada Jadwalka</p>
   <p class="sub">Marka aad dhamaystirto isbadelada magacyada ee labada miis kore, riix kaydi si loo hayo.</p>
-  <div class="row" id="saveEditsRow" style="display:none;">
+  <div class="row" id="saveEditsRow">
     <button class="gold" onclick="saveAllEdits()">💾 Kaydi Isbadelada Dhamaan</button>
     <button class="secondary" onclick="resetToDefault()">♻️ Ku Celi Qaabkii Hore</button>
   </div>
+
 </div>
 
 <div class="card">
@@ -255,28 +267,6 @@
 </p>
 
 <script>
-// ---------- PASSWORD LOCK ----------
-const APP_PASSWORD = "Abe123";
-function unlockSettings(){
-  const val = document.getElementById('settingsPassword').value;
-  if(val === APP_PASSWORD){
-    document.getElementById('settingsLock').style.display = 'none';
-    document.getElementById('settingsError').textContent = '';
-    document.getElementById('settingsFields').style.display = 'block';
-    isUnlocked = true;
-    document.getElementById('saveEditsCard').style.display = 'block';
-    document.getElementById('saveEditsRow').style.display = 'flex';
-    renderTables();
-    const info = getCurrentShiftInfo();
-    highlightToday(info.scheduleDayName, info.shift);
-  } else {
-    document.getElementById('settingsError').textContent = "Password khaldan, isku day mar kale.";
-  }
-}
-document.getElementById('settingsPassword').addEventListener('keydown', (e)=>{
-  if(e.key === 'Enter') unlockSettings();
-});
-
 // ---------- SCHEDULE DATA ----------
 const days = ["Sabti","Axad","Isniin","Talaado","Arbaco","Khamiis","Jimce"];
 // JS getDay(): 0=Sunday...6=Saturday. Map to our days array index.
@@ -285,11 +275,11 @@ const jsDayToIndex = {6:0, 0:1, 1:2, 2:3, 3:4, 4:5, 5:6}; // Sat=0 ... Fri=6
 const baseSchedule = {
   "Sabti":   {maalin:"Ibraheem Abdulkader", galab:"Mustafe", habeen:"Cumar"},
   "Axad":    {maalin:"Haaruun", galab:"Cumar", habeen:"Ugaas Maxamuud"},
-  "Isniin":  {maalin:"Cumar", galab:"Ciise", habeen:"Ibraheem Abdulkader"},
+  "Isniin":  {maalin:"Cumar", galab:"Ibraheem Abdulkader", habeen:"Ibraheem Abdulkader"},
   "Talaado": {maalin:"Mustafe", galab:"Ciise", habeen:"Haaruun"},
   "Arbaco":  {maalin:"Cumar", galab:"Mustafe", habeen:"Ciise"},
   "Khamiis": {maalin:"Haaruun", galab:"Cumar", habeen:"Mustafe"},
-  "Jimce":   {maalin:"Ciise", galab:"Ibraheem Abdulkader", habeen:null} // habeenka wuxuu ku xiran yahay toddobaadka
+  "Jimce":   {maalin:"Ciise", galab:"Ciise", habeen:null} // habeenka wuxuu ku xiran yahay toddobaadka
 };
 
 // ---------- CUSTOM (EDITED) SCHEDULE PERSISTENCE ----------
@@ -317,19 +307,101 @@ let currentWeek = localStorage.getItem('bx_week') || "2";
 let nightInterval = parseInt(localStorage.getItem('bx_nightInterval') || "15");
 let dayInterval = parseInt(localStorage.getItem('bx_dayInterval') || "60");
 let notifTimer = null;
-let isUnlocked = false;
+let isUnlocked = true; // wax password ah lama baahna hadda — waa la dhamaystiray isbeddelka
+let myName = localStorage.getItem('bx_myName') || null;
 
-document.getElementById('weekSelect').value = currentWeek;
 document.getElementById('nightInterval').value = nightInterval;
 document.getElementById('dayInterval').value = dayInterval;
 
-function saveWeek(){
-  currentWeek = document.getElementById('weekSelect').value;
-  localStorage.setItem('bx_week', currentWeek);
-  refresh();
-  syncConfigToSW();
-  log("Toddobaadka waxaa loo beddelay: Toddobaadka " + currentWeek);
+// ---------- AUTO WEEK ALTERNATION (isbeddelka otomaatig ah) ----------
+// Toddobaadka (Xaaris/Yaxye) wuu is-beddelaa asboowc kasta, iyada oo lagu
+// salaynayo lambarka toddobaadka ISO ee kalandarka — looma baahna in mar
+// walba gacanta lagu beddelo.
+function getISOWeekNumber(date){
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = (d.getUTCDay() + 6) % 7; // Isniin=0 ... Axad=6
+  d.setUTCDate(d.getUTCDate() - dayNum + 3);
+  const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
+  const diff = d - firstThursday;
+  return 1 + Math.round(diff / (7*24*3600*1000));
 }
+
+function computeAutoWeek(){
+  const isoWeek = getISOWeekNumber(new Date());
+  const anchorIso = parseInt(localStorage.getItem('bx_anchorIsoWeek'), 10);
+  const anchorWeek = localStorage.getItem('bx_anchorWeek');
+  if(!anchorIso || !anchorWeek) return null;
+  const diff = isoWeek - anchorIso;
+  const flips = ((diff % 2) + 2) % 2;
+  return flips === 0 ? anchorWeek : (anchorWeek === "1" ? "2" : "1");
+}
+
+function setWeekAnchor(weekValue){
+  localStorage.setItem('bx_anchorIsoWeek', String(getISOWeekNumber(new Date())));
+  localStorage.setItem('bx_anchorWeek', weekValue);
+}
+
+function applyAutoWeek(){
+  let auto = computeAutoWeek();
+  if(auto === null){
+    // Weli lama dejin anchor-ka — ka dhig toddobaadka hadda ee la doortay ("2" — Yaxye) tan la bilaabayo.
+    auto = currentWeek;
+    setWeekAnchor(auto);
+  }
+  if(auto !== currentWeek){
+    currentWeek = auto;
+    localStorage.setItem('bx_week', currentWeek);
+  }
+  document.getElementById('weekDisplay').textContent =
+    (currentWeek == "1") ? "Toddobaadka 1 — Dr. Xaaris" : "Toddobaadka 2 — Dr. Yaxye";
+  syncConfigToSW();
+}
+
+// ---------- WHO AM I (magaca isticmaalaha) ----------
+function getAllNames(){
+  const names = new Set();
+  for(const w of [1,2]){
+    const sched = getSchedule(w);
+    for(const d of days){
+      ['maalin','galab','habeen'].forEach(s=>{
+        if(sched[d][s]) names.add(sched[d][s]);
+      });
+    }
+  }
+  return Array.from(names).sort();
+}
+
+function openWhoAmI(){
+  const sel = document.getElementById('whoAmISelect');
+  sel.innerHTML = '';
+  getAllNames().forEach(n=>{
+    const opt = document.createElement('option');
+    opt.value = n; opt.textContent = n;
+    if(n === myName) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  document.getElementById('whoAmIModal').style.display = 'flex';
+}
+
+function confirmWhoAmI(){
+  const sel = document.getElementById('whoAmISelect');
+  myName = sel.value;
+  localStorage.setItem('bx_myName', myName);
+  document.getElementById('myNameLabel').textContent = myName;
+  document.getElementById('whoAmIModal').style.display = 'none';
+  syncConfigToSW();
+  log("Waxaad dooratay inaad tahay: " + myName);
+}
+
+// Markii ugu horeysa app-ku la furo (myName lama dejin), weydii isla markiiba.
+if(!myName){
+  openWhoAmI();
+} else {
+  document.getElementById('myNameLabel').textContent = myName;
+}
+
+
+
 function saveSettings(){
   nightInterval = parseInt(document.getElementById('nightInterval').value);
   dayInterval = parseInt(document.getElementById('dayInterval').value);
@@ -400,12 +472,32 @@ function getCurrentShiftInfo(){
 }
 
 function refresh(){
+  applyAutoWeek();
   const info = getCurrentShiftInfo();
+  const isMine = !!(myName && info.person && info.person.trim().toLowerCase() === myName.trim().toLowerCase());
   document.getElementById('shiftLabel').textContent = info.shiftLabel + " • " + info.dayName;
   document.getElementById('personName').textContent = info.person;
   document.getElementById('metaInfo').textContent = "Toddobaadka " + currentWeek + " • Waqtiga hadda: " + info.now.toLocaleTimeString('so-SO');
   renderTables();
   highlightToday(info.scheduleDayName, info.shift);
+  updateWhatsAppButton(info, isMine);
+}
+
+function updateWhatsAppButton(info, isMine){
+  const row = document.getElementById('waRow');
+  if(isMine){
+    const msg = encodeURIComponent(`Waan la joogaa shaqada — ${info.person}. ${info.shiftLabel} (${info.dayName}).`);
+    currentWaLink = `https://api.whatsapp.com/send?text=${msg}`;
+    row.style.display = 'flex';
+  } else {
+    row.style.display = 'none';
+    currentWaLink = null;
+  }
+}
+
+let currentWaLink = null;
+function sendWhatsAppUpdate(){
+  if(currentWaLink) window.open(currentWaLink, '_blank');
 }
 
 function renderTables(){
@@ -446,31 +538,67 @@ function speak(text){
   }catch(e){ console.warn(e); }
 }
 
-function notify(title, body){
+// Dhawaaq gaaban (beep) oo la celceliyo — loo isticmaalo marka ay tahay
+// wakhtiga qofka ku shaqeynaya taleefanka (foreground).
+function playBeep(times){
+  times = times || 3;
+  let count = 0;
+  function beepOnce(){
+    try{
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.35, ctx.currentTime);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.35);
+      osc.onended = () => ctx.close();
+    }catch(e){ console.warn(e); }
+    count++;
+    if(count < times) setTimeout(beepOnce, 550);
+  }
+  beepOnce();
+}
+
+function notify(title, body, isMine){
   if(Notification.permission !== 'granted') return;
   // Prefer the Service Worker so the notification is more reliable when the
   // tab is backgrounded, and so it survives even if this JS context stalls.
+  const vibratePattern = isMine ? [250,120,250,120,250] : [200];
   if(navigator.serviceWorker){
     navigator.serviceWorker.ready.then(reg=>{
-      reg.active && reg.active.postMessage({type:'SHOW_NOTIFICATION', title, body});
+      reg.active && reg.active.postMessage({type:'SHOW_NOTIFICATION', title, body, isMine});
     }).catch(()=>{
-      try{ new Notification(title, {body, requireInteraction:true}); }catch(e){}
+      try{ new Notification(title, {body, requireInteraction:true, vibrate:vibratePattern}); }catch(e){}
     });
   } else {
-    try{ new Notification(title, {body, requireInteraction:true}); }catch(e){}
+    try{ new Notification(title, {body, requireInteraction:true, vibrate:vibratePattern}); }catch(e){}
   }
 }
 
 function announceCurrent(){
   const info = getCurrentShiftInfo();
-  const text = info.shift==='habeen'
-    ? `Xilliga habeenka. Qofka joogitaanka ah waa ${info.person}. Fadlan soo jeed, ha seexan.`
-    : `${info.shiftLabel.replace(/[^\w\s]/g,'')}. Qofka joogitaanka ah waa ${info.person}.`;
+  const isMine = !!(myName && info.person && info.person.trim().toLowerCase() === myName.trim().toLowerCase());
+  const text = isMine
+    ? (info.shift==='habeen'
+        ? `${info.person}, wakhtigaaga ayaa yimid. Waa habeenka joogitaankaaga. Fadlan soo jeed, ha seexan.`
+        : `${info.person}, wakhtigaaga ayaa yimid. ${info.shiftLabel.replace(/[^\w\s]/g,'')}.`)
+    : (info.shift==='habeen'
+        ? `Xilliga habeenka. Qofka joogitaanka ah waa ${info.person}. Fadlan soo jeed, ha seexan.`
+        : `${info.shiftLabel.replace(/[^\w\s]/g,'')}. Qofka joogitaanka ah waa ${info.person}.`);
   speak(text);
-  notify("👤 Qofka Joogitaanka Ah: " + info.person, info.shiftLabel + " — " + info.dayName);
-  log("Xasuusin: " + info.person + " (" + info.shiftLabel + ")");
+  if(isMine) playBeep(3);
+  notify(
+    isMine ? "🔔 Waa Wakhtigaaga: " + info.person : "👤 Qofka Joogitaanka Ah: " + info.person,
+    info.shiftLabel + " — " + info.dayName,
+    isMine
+  );
+  log((isMine ? "Xasuusin (ADIGA): " : "Xasuusin: ") + info.person + " (" + info.shiftLabel + ")");
   document.getElementById('personName').textContent = info.person;
   document.getElementById('shiftLabel').textContent = info.shiftLabel + " • " + info.dayName;
+  updateWhatsAppButton(info, isMine);
 }
 
 function scheduleNextTimer(){
@@ -527,7 +655,8 @@ function syncConfigToSW(){
         week: currentWeek,
         customSchedule: customSchedule,
         nightInterval: nightInterval,
-        dayInterval: dayInterval
+        dayInterval: dayInterval,
+        myName: myName
       }
     });
   }).catch(()=>{});
